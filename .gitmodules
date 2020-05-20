@@ -1,3 +1,0 @@
-[submodule "tf_glove"]
-	path = tf_glove
-	url = https://github.com/GradySimon/tensorflow-glove
