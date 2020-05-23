@@ -10,6 +10,7 @@ import numpy as np
 import os
 import io
 import time
+import fileinput
 
 # Download the file
 path_to_zip = tf.keras.utils.get_file(
@@ -281,27 +282,27 @@ def train_step(inp, targ, enc_hidden):
 
 EPOCHS = 10
 
-for epoch in range(EPOCHS):
-  start = time.time()
+# for epoch in range(EPOCHS):
+#   start = time.time()
 
-  enc_hidden = encoder.initialize_hidden_state()
-  total_loss = 0
+#   enc_hidden = encoder.initialize_hidden_state()
+#   total_loss = 0
 
-  for (batch, (inp, targ)) in enumerate(dataset.take(steps_per_epoch)):
-    batch_loss = train_step(inp, targ, enc_hidden)
-    total_loss += batch_loss
+#   for (batch, (inp, targ)) in enumerate(dataset.take(steps_per_epoch)):
+#     batch_loss = train_step(inp, targ, enc_hidden)
+#     total_loss += batch_loss
 
-    # if batch % 100 == 0:
-    print('Epoch {} Batch {} Loss {:.4f}'.format(epoch + 1,
-                                                batch,
-                                                batch_loss.numpy()))
-  # saving (checkpoint) the model every 2 epochs
-  if (epoch + 1) % 2 == 0:
-    checkpoint.save(file_prefix = checkpoint_prefix)
+#     # if batch % 100 == 0:
+#     print('Epoch {} Batch {} Loss {:.4f}'.format(epoch + 1,
+#                                                 batch,
+#                                                 batch_loss.numpy()))
+#   # saving (checkpoint) the model every 2 epochs
+#   if (epoch + 1) % 2 == 0:
+#     checkpoint.save(file_prefix = checkpoint_prefix)
 
-  print('Epoch {} Loss {:.4f}'.format(epoch + 1,
-                                      total_loss / steps_per_epoch))
-  print('Time taken for 1 epoch {} sec\n'.format(time.time() - start))
+#   print('Epoch {} Loss {:.4f}'.format(epoch + 1,
+#                                       total_loss / steps_per_epoch))
+#   print('Time taken for 1 epoch {} sec\n'.format(time.time() - start))
 
 def evaluate(sentence):
   attention_plot = np.zeros((max_length_targ, max_length_inp))
@@ -324,8 +325,8 @@ def evaluate(sentence):
 
   for t in range(max_length_targ):
     predictions, dec_hidden_h, dec_hidden_c, _ = decoder(dec_input,
-                                                                         dec_hidden_h,
-                                                                         enc_out)
+                                                         dec_hidden_h,
+                                                         enc_out)
 
     predicted_id = tf.argmax(predictions[0]).numpy()
 
@@ -339,15 +340,25 @@ def evaluate(sentence):
 
   return result, sentence
 
-def translate(sentence):
-  result, sentence = evaluate(sentence)
+# def translate(sentence):
+#   result, sentence = evaluate(sentence)
 
-  print('Input: %s' % (sentence))
-  print('Predicted translation: {}'.format(result))
+#   print('Input: %s' % (sentence))
+#   print('Predicted translation: {}'.format(result))
 
 # restoring the latest checkpoint in checkpoint_dir
-# checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
+checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
 
-translate(u'hace mucho frio aqui.')
-translate(u'esta es mi vida.')
-translate(u'¿todavia estan en casa?')
+# translate(u'hace mucho frio aqui.')
+# translate(u'esta es mi vida.')
+# translate(u'¿todavia estan en casa?')
+
+def translate(sentence):
+  result, sentence = evaluate(sentence)
+  return result
+
+print('User:')
+for line in fileinput.input():
+  print('Bot:')
+  print(translate(line))
+  print('User:')
