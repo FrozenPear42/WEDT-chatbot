@@ -127,26 +127,28 @@ class Encoder(tf.keras.Model):
     self.batch_sz = batch_sz
     self.enc_units = enc_units
     self.embedding = tf.keras.layers.Embedding(vocab_size, embedding_dim)
-    self.gru = tf.keras.layers.GRU(self.enc_units,
-                                   return_sequences=True,
-                                   return_state=True,
-                                   recurrent_initializer='glorot_uniform')
+    self.lstm = tf.keras.layers.LSTM(self.enc_units,
+                                     return_sequences=True,
+                                     return_state=True,
+                                     recurrent_initializer='glorot_uniform')
 
   def call(self, x, hidden):
     x = self.embedding(x)
-    output, state = self.gru(x, initial_state = hidden)
-    return output, state
+    output, state_h, state_c = self.lstm(x, initial_state = hidden)
+    return output, state_h, state_c
 
   def initialize_hidden_state(self):
-    return tf.zeros((self.batch_sz, self.enc_units))
+    return [tf.zeros((self.batch_sz, self.enc_units)),
+            tf.zeros((self.batch_sz, self.enc_units))]
 
 encoder = Encoder(vocab_inp_size, embedding_dim, units, BATCH_SIZE)
 
 # sample input
 sample_hidden = encoder.initialize_hidden_state()
-sample_output, sample_hidden = encoder(example_input_batch, sample_hidden)
+sample_output, sample_hidden_h, sample_hidden_c = encoder(example_input_batch, sample_hidden)
 print ('Encoder output shape: (batch size, sequence length, units) {}'.format(sample_output.shape))
-print ('Encoder Hidden state shape: (batch size, units) {}'.format(sample_hidden.shape))
+print ('Encoder Hidden H state shape: (batch size, units) {}'.format(sample_hidden_h.shape))
+print ('Encoder Hidden C state shape: (batch size, units) {}'.format(sample_hidden_c.shape))
 
 class BahdanauAttention(tf.keras.layers.Layer):
   def __init__(self, units):
@@ -178,7 +180,7 @@ class BahdanauAttention(tf.keras.layers.Layer):
     return context_vector, attention_weights
 
 attention_layer = BahdanauAttention(10)
-attention_result, attention_weights = attention_layer(sample_hidden, sample_output)
+attention_result, attention_weights = attention_layer(sample_hidden_h, sample_output)
 
 print("Attention result shape: (batch size, units) {}".format(attention_result.shape))
 print("Attention weights shape: (batch_size, sequence_length, 1) {}".format(attention_weights.shape))
@@ -189,10 +191,10 @@ class Decoder(tf.keras.Model):
     self.batch_sz = batch_sz
     self.dec_units = dec_units
     self.embedding = tf.keras.layers.Embedding(vocab_size, embedding_dim)
-    self.gru = tf.keras.layers.GRU(self.dec_units,
-                                   return_sequences=True,
-                                   return_state=True,
-                                   recurrent_initializer='glorot_uniform')
+    self.lstm = tf.keras.layers.LSTM(self.dec_units,
+                                    return_sequences=True,
+                                    return_state=True,
+                                    recurrent_initializer='glorot_uniform')
     self.fc = tf.keras.layers.Dense(vocab_size)
 
     # used for attention
@@ -209,7 +211,7 @@ class Decoder(tf.keras.Model):
     x = tf.concat([tf.expand_dims(context_vector, 1), x], axis=-1)
 
     # passing the concatenated vector to the GRU
-    output, state = self.gru(x)
+    output, state_h, state_c = self.lstm(x)
 
     # output shape == (batch_size * 1, hidden_size)
     output = tf.reshape(output, (-1, output.shape[2]))
@@ -217,12 +219,12 @@ class Decoder(tf.keras.Model):
     # output shape == (batch_size, vocab)
     x = self.fc(output)
 
-    return x, state, attention_weights
+    return x, state_h, state_c, attention_weights
 
 decoder = Decoder(vocab_tar_size, embedding_dim, units, BATCH_SIZE)
 
-sample_decoder_output, _, _ = decoder(tf.random.uniform((BATCH_SIZE, 1)),
-                                      sample_hidden, sample_output)
+sample_decoder_output, _, _, _ = decoder(tf.random.uniform((BATCH_SIZE, 1)),
+                                      sample_hidden_h, sample_output)
 
 print ('Decoder output shape: (batch_size, vocab size) {}'.format(sample_decoder_output.shape))
 
@@ -250,16 +252,17 @@ def train_step(inp, targ, enc_hidden):
   loss = 0
 
   with tf.GradientTape() as tape:
-    enc_output, enc_hidden = encoder(inp, enc_hidden)
+    enc_output, enc_hidden_h, enc_hidden_c = encoder(inp, enc_hidden)
+    enc_hidden = [enc_hidden_h, enc_hidden_c]
 
-    dec_hidden = enc_hidden
+    dec_hidden = enc_hidden_h
 
     dec_input = tf.expand_dims([targ_lang.word_index['<start>']] * BATCH_SIZE, 1)
 
     # Teacher forcing - feeding the target as the next input
     for t in range(1, targ.shape[1]):
       # passing enc_output to the decoder
-      predictions, dec_hidden, _ = decoder(dec_input, dec_hidden, enc_output)
+      predictions, dec_hidden, _, _ = decoder(dec_input, dec_hidden, enc_output)
 
       loss += loss_function(targ[:, t], predictions)
 
@@ -290,8 +293,8 @@ for epoch in range(EPOCHS):
 
     # if batch % 100 == 0:
     print('Epoch {} Batch {} Loss {:.4f}'.format(epoch + 1,
-                                                 batch,
-                                                 batch_loss.numpy()))
+                                                batch,
+                                                batch_loss.numpy()))
   # saving (checkpoint) the model every 2 epochs
   if (epoch + 1) % 2 == 0:
     checkpoint.save(file_prefix = checkpoint_prefix)
@@ -313,16 +316,16 @@ def evaluate(sentence):
 
   result = ''
 
-  hidden = [tf.zeros((1, units))]
-  enc_out, enc_hidden = encoder(inputs, hidden)
+  hidden = [tf.zeros((1, units)), tf.zeros((1, units))]
+  enc_out, enc_hidden_h, enc_hidden_c = encoder(inputs, hidden)
 
-  dec_hidden = enc_hidden
+  dec_hidden_h = enc_hidden_h
   dec_input = tf.expand_dims([targ_lang.word_index['<start>']], 0)
 
   for t in range(max_length_targ):
-    predictions, dec_hidden, attention_weights = decoder(dec_input,
-                                                         dec_hidden,
-                                                         enc_out)
+    predictions, dec_hidden_h, dec_hidden_c, attention_weights = decoder(dec_input,
+                                                                         dec_hidden_h,
+                                                                         enc_out)
 
     # storing the attention weights to plot later on
     attention_weights = tf.reshape(attention_weights, (-1, ))
