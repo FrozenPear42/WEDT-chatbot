@@ -225,6 +225,10 @@ class GloVeModel():
                 "Need to train model before accessing embeddings")
         return self.__embeddings
 
+    @property
+    def word_to_id(self):
+        return self.__word_to_id
+
     def id_for_word(self, word):
         if self.__word_to_id is None:
             raise NotFitToCorpusError(

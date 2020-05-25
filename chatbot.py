@@ -51,6 +51,13 @@ embedding_matrix = np.zeros((vocab_size, embedding_dim))
 for i in range(vocab_size):
     embedding_matrix[i] = np.asfarray(glove_model.embeddings[i])
 
+print('created embedding_matrix')
+
+print("vocab_size: {}, input max length: {}, output max_length {}".format(
+    vocab_size, max_length_inp, max_length_targ))
+
+print(input_tensor[0], target_tensor[0])
+
 encoder = Encoder(vocab_size, embedding_dim, embedding_matrix,
                   max_length_inp, units, BATCH_SIZE)
 decoder = Decoder(vocab_size, embedding_dim,
@@ -86,7 +93,7 @@ def train_step(inp, targ, enc_hidden):
         enc_hidden = [enc_hidden_h, enc_hidden_c]
         dec_hidden = enc_hidden_h
         dec_input = tf.expand_dims(
-            [glove_model.id_for_word('<start>')] * BATCH_SIZE, 1)
+            [glove_model.word_to_id['<start>']] * BATCH_SIZE, 1)
 
         for t in range(1, targ.shape[1]):
             predictions, dec_hidden, _, _ = decoder(
@@ -102,6 +109,7 @@ def train_step(inp, targ, enc_hidden):
 
 
 if options.train:
+    print('training')
     EPOCHS = 10
     for epoch in range(EPOCHS):
         start = time.time()
@@ -133,7 +141,7 @@ def evaluate(sentence):
     inputs = []
     for word in sentence.split(' '):
         try:
-            inputs.append(glove_model.id_for_word(emoji.demojize(word)))
+            inputs.append(glove_model.word_to_id[emoji.demojize(word)])
         except:
             pass
 
@@ -148,7 +156,7 @@ def evaluate(sentence):
     enc_out, enc_hidden_h, enc_hidden_c = encoder(inputs, hidden)
 
     dec_hidden_h = enc_hidden_h
-    dec_input = tf.expand_dims([glove_model.id_for_word('<start>')], 0)
+    dec_input = tf.expand_dims([glove_model.word_to_id['<start>']], 0)
 
     for t in range(max_length_targ):
         predictions, dec_hidden_h, dec_hidden_c, _ = decoder(dec_input,
