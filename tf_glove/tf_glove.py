@@ -8,11 +8,13 @@ import tensorflow as tf
 class NotTrainedError(Exception):
     pass
 
+
 class NotFitToCorpusError(Exception):
     pass
 
+
 class GloVeModel():
-    def __init__(self, embedding_size, context_size, max_vocab_size=100000, min_occurrences=1,
+    def __init__(self, embedding_size=1000, context_size=10, max_vocab_size=100000, min_occurrences=1,
                  scaling_factor=3/4, cooccurrence_cap=100, batch_size=512, learning_rate=0.05):
         self.embedding_size = embedding_size
         if isinstance(context_size, tuple):
@@ -20,7 +22,8 @@ class GloVeModel():
         elif isinstance(context_size, int):
             self.left_context = self.right_context = context_size
         else:
-            raise ValueError("`context_size` should be an int or a tuple of two ints")
+            raise ValueError(
+                "`context_size` should be an int or a tuple of two ints")
         self.max_vocab_size = max_vocab_size
         self.min_occurrences = min_occurrences
         self.scaling_factor = scaling_factor
@@ -31,6 +34,32 @@ class GloVeModel():
         self.__word_to_id = None
         self.__cooccurrence_matrix = None
         self.__embeddings = None
+
+    def save_to_file(self, filename):
+        with open(filename, 'w', newline='', encoding='utf-8') as file:
+            for i in range(len(self.__words)):
+                file.write(self.__words[i])
+                file.write(' ')
+                file.write(' '.join([str(x) for x in self.__embeddings[i]]))
+                file.write('\n')
+
+    def load_from_file(self, filename):
+        self.__words = []
+        self.__embeddings = []
+        self.__word_to_id = {}
+        with open(filename, newline='', encoding='utf-8') as file:
+            id = 0
+            for line in file:
+                if len(line) == 0:
+                    continue
+                row = line.split()
+                word = row[0]
+                embeding = [float(x) for x in row[1:]]
+                self.__words.append(word)
+                self.__embeddings.append(embeding)
+                self.__word_to_id[word] = id
+                id += 1
+        self.embedding_size = len(self.__embeddings[0])
 
     def fit_to_corpus(self, corpus):
         self.__fit_to_corpus(corpus, self.max_vocab_size, self.min_occurrences,
@@ -49,7 +78,8 @@ class GloVeModel():
                 for i, context_word in enumerate(r_context):
                     cooccurrence_counts[(word, context_word)] += 1 / (i + 1)
         if len(cooccurrence_counts) == 0:
-            raise ValueError("No coccurrences in corpus. Did you try to reuse a generator?")
+            raise ValueError(
+                "No coccurrences in corpus. Did you try to reuse a generator?")
         self.__words = [word for word, count in word_counts.most_common(vocab_size)
                         if count >= min_occurrences]
         self.__word_to_id = {word: i for i, word in enumerate(self.__words)}
@@ -67,17 +97,19 @@ class GloVeModel():
                                          name="scaling_factor")
 
             self.__focal_input = tf.compat.v1.placeholder(tf.int32, shape=[self.batch_size],
-                                                name="focal_words")
+                                                          name="focal_words")
             self.__context_input = tf.compat.v1.placeholder(tf.int32, shape=[self.batch_size],
-                                                  name="context_words")
+                                                            name="context_words")
             self.__cooccurrence_count = tf.compat.v1.placeholder(tf.float32, shape=[self.batch_size],
-                                                       name="cooccurrence_count")
+                                                                 name="cooccurrence_count")
 
             focal_embeddings = tf.Variable(
-                tf.random.uniform([self.vocab_size, self.embedding_size], 1.0, -1.0),
+                tf.random.uniform(
+                    [self.vocab_size, self.embedding_size], 1.0, -1.0),
                 name="focal_embeddings")
             context_embeddings = tf.Variable(
-                tf.random.uniform([self.vocab_size, self.embedding_size], 1.0, -1.0),
+                tf.random.uniform(
+                    [self.vocab_size, self.embedding_size], 1.0, -1.0),
                 name="context_embeddings")
 
             focal_biases = tf.Variable(tf.random.uniform([self.vocab_size], 1.0, -1.0),
@@ -85,10 +117,14 @@ class GloVeModel():
             context_biases = tf.Variable(tf.random.uniform([self.vocab_size], 1.0, -1.0),
                                          name="context_biases")
 
-            focal_embedding = tf.nn.embedding_lookup(params=[focal_embeddings], ids=self.__focal_input)
-            context_embedding = tf.nn.embedding_lookup(params=[context_embeddings], ids=self.__context_input)
-            focal_bias = tf.nn.embedding_lookup(params=[focal_biases], ids=self.__focal_input)
-            context_bias = tf.nn.embedding_lookup(params=[context_biases], ids=self.__context_input)
+            focal_embedding = tf.nn.embedding_lookup(
+                params=[focal_embeddings], ids=self.__focal_input)
+            context_embedding = tf.nn.embedding_lookup(
+                params=[context_embeddings], ids=self.__context_input)
+            focal_bias = tf.nn.embedding_lookup(
+                params=[focal_biases], ids=self.__focal_input)
+            context_bias = tf.nn.embedding_lookup(
+                params=[context_biases], ids=self.__context_input)
 
             weighting_factor = tf.minimum(
                 1.0,
@@ -96,9 +132,11 @@ class GloVeModel():
                     tf.compat.v1.div(self.__cooccurrence_count, count_max),
                     scaling_factor))
 
-            embedding_product = tf.reduce_sum(input_tensor=tf.multiply(focal_embedding, context_embedding), axis=1)
+            embedding_product = tf.reduce_sum(input_tensor=tf.multiply(
+                focal_embedding, context_embedding), axis=1)
 
-            log_cooccurrences = tf.math.log(tf.cast(self.__cooccurrence_count, dtype=tf.float32))
+            log_cooccurrences = tf.math.log(
+                tf.cast(self.__cooccurrence_count, dtype=tf.float32))
 
             distance_expr = tf.square(tf.add_n([
                 embedding_product,
@@ -125,7 +163,8 @@ class GloVeModel():
         with tf.compat.v1.Session(graph=self.__graph) as session:
             if should_write_summaries:
                 print("Writing TensorBoard summaries to {}".format(log_dir))
-                summary_writer = tf.compat.v1.summary.FileWriter(log_dir, graph=session.graph)
+                summary_writer = tf.compat.v1.summary.FileWriter(
+                    log_dir, graph=session.graph)
             tf.compat.v1.global_variables_initializer().run()
             for epoch in range(num_epochs):
                 shuffle(batches)
@@ -139,13 +178,16 @@ class GloVeModel():
                         self.__cooccurrence_count: counts}
                     session.run([self.__optimizer], feed_dict=feed_dict)
                     if should_write_summaries and (total_steps + 1) % summary_batch_interval == 0:
-                        summary_str = session.run(self.__summary, feed_dict=feed_dict)
+                        summary_str = session.run(
+                            self.__summary, feed_dict=feed_dict)
                         summary_writer.add_summary(summary_str, total_steps)
                     total_steps += 1
                 if should_generate_tsne and (epoch + 1) % tsne_epoch_interval == 0:
                     current_embeddings = self.__combined_embeddings.eval()
-                    output_path = os.path.join(log_dir, "epoch{:03d}.png".format(epoch + 1))
-                    self.generate_tsne(output_path, embeddings=current_embeddings)
+                    output_path = os.path.join(
+                        log_dir, "epoch{:03d}.png".format(epoch + 1))
+                    self.generate_tsne(
+                        output_path, embeddings=current_embeddings)
             self.__embeddings = self.__combined_embeddings.eval()
             if should_write_summaries:
                 summary_writer.close()
@@ -172,18 +214,21 @@ class GloVeModel():
     @property
     def words(self):
         if self.__words is None:
-            raise NotFitToCorpusError("Need to fit model to corpus before accessing words.")
+            raise NotFitToCorpusError(
+                "Need to fit model to corpus before accessing words.")
         return self.__words
 
     @property
     def embeddings(self):
         if self.__embeddings is None:
-            raise NotTrainedError("Need to train model before accessing embeddings")
+            raise NotTrainedError(
+                "Need to train model before accessing embeddings")
         return self.__embeddings
 
     def id_for_word(self, word):
         if self.__word_to_id is None:
-            raise NotFitToCorpusError("Need to fit model to corpus before looking up word ids.")
+            raise NotFitToCorpusError(
+                "Need to fit model to corpus before looking up word ids.")
         return self.__word_to_id[word]
 
     def generate_tsne(self, path=None, size=(100, 100), word_count=1000, embeddings=None):
@@ -213,7 +258,7 @@ def _window(region, start_index, end_index):
     its return value with `NULL_WORD`.
     """
     last_index = len(region) + 1
-    selected_tokens = region[max(start_index, 0):min(end_index, last_index) + 1]
+    selected_tokens = region[max(start_index, 0)                             :min(end_index, last_index) + 1]
     return selected_tokens
 
 

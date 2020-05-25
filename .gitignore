@@ -2,3 +2,5 @@
 .vscode/
 .idea/
 glove_logs/
+
+*.100d.txt

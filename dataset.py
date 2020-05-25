@@ -3,54 +3,59 @@ import os
 import re
 import unicodedata
 import io
+import csv
+import emoji
 
-path_to_zip = tf.keras.utils.get_file(
-    'spa-eng.zip', origin='http://storage.googleapis.com/download.tensorflow.org/data/spa-eng.zip',
-    extract=True)
-
-path_to_file = os.path.dirname(path_to_zip)+"/spa-eng/spa.txt"
-
-def unicode_to_ascii(s):
-  return ''.join(c for c in unicodedata.normalize('NFD', s)
-      if unicodedata.category(c) != 'Mn')
+from nltk.tokenize import TweetTokenizer
+from tf_glove.tf_glove import GloVeModel
 
 
-def preprocess_sentence(w):
-  w = unicode_to_ascii(w.lower().strip())
+def preprocess_sentence(sentence):
+    w = '<start> ' + ' '.join(w.split()) + ' <end>'
+    return w
 
-  w = re.sub(r"([?.!,¿])", r" \1 ", w)
-  w = re.sub(r'[" "]+', " ", w)
-
-  w = re.sub(r"[^a-zA-Z?.!,¿]+", " ", w)
-
-  w = w.strip()
-
-  w = '<start> ' + w + ' <end>'
-  return w
 
 def create_dataset(path, num_examples):
-  lines = io.open(path, encoding='UTF-8').read().strip().split('\n')
+    dataset = []
+    with open(path, newline='',  encoding="utf8") as data_file:
+        reader = csv.reader(data_file, delimiter=',', quotechar='\"')
+        for row in reader:
+            side_a = '<start> ' + row[0] + ' <end>'
+            side_b = '<start> ' + row[1] + ' <end>'
+            # normalize all whitespaces to space
+            side_a = ' '.join(side_a.split())
+            side_b = ' '.join(side_b.split())
+            dataset.append([side_a, side_b])
+    return dataset
 
-  word_pairs = [[preprocess_sentence(w) for w in l.split('\t')]  for l in lines[:num_examples]]
 
-  return zip(*word_pairs)
+def tokenize(sentences, model):
+    tokenizer = TweetTokenizer()
+    tensor = []
+    for sentence in sentences:
+        tokens = [emoji.demojize(token.lower())
+                  for token in tokenizer.tokenize(sentence)]
+        vector = []
+        for token in tokens:
+            try:
+                vector.append(model.id_for_word(token))
+            except:
+                pass
+        tensor.append(vector)
 
-def tokenize(lang):
-  lang_tokenizer = tf.keras.preprocessing.text.Tokenizer(
-      filters='')
-  lang_tokenizer.fit_on_texts(lang)
+    tensor = tf.keras.preprocessing.sequence.pad_sequences(
+        tensor, padding='post')
 
-  tensor = lang_tokenizer.texts_to_sequences(lang)
+    return tensor
 
-  tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                         padding='post')
 
-  return tensor, lang_tokenizer
+def load_dataset(glove_model, path, num_examples=None):
+    dataset = create_dataset(path, num_examples)
 
-def load_dataset(num_examples=None):
-  targ_lang, inp_lang = create_dataset(path_to_file, num_examples)
+    input_data = map(lambda x: x[0], dataset)
+    output_data = map(lambda x: x[1], dataset)
 
-  input_tensor, inp_lang_tokenizer = tokenize(inp_lang)
-  target_tensor, targ_lang_tokenizer = tokenize(targ_lang)
+    input_tensor = tokenize(input_data, glove_model)
+    target_tensor = tokenize(output_data, glove_model)
 
-  return input_tensor, target_tensor, inp_lang_tokenizer, targ_lang_tokenizer
+    return input_tensor, target_tensor
