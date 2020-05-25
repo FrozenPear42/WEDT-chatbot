@@ -46,6 +46,7 @@ def tokenize(sentences, model):
     tensor = tf.keras.preprocessing.sequence.pad_sequences(
         tensor, padding='post')
 
+    print(tensor.shape)
     return tensor
 
 

@@ -29,7 +29,7 @@ glove_model.load_from_file('data/glove.local.txt')
 
 num_examples = 100000
 input_tensor, target_tensor = load_dataset(
-    glove_model, 'data/reddit_merged.csv', num_examples)
+    glove_model, 'data/reddit.csv', num_examples)
 
 max_length_targ, max_length_inp = target_tensor.shape[1], input_tensor.shape[1]
 input_tensor_train, input_tensor_val, target_tensor_train, target_tensor_val = train_test_split(
