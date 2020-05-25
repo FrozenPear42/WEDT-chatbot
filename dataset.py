@@ -11,8 +11,9 @@ from tf_glove.tf_glove import GloVeModel
 
 
 def preprocess_sentence(sentence):
-    w = '<start> ' + ' '.join(w.split()) + ' <end>'
-    return w
+    sentence = '<start> ' + ' '.join(sentence.split()) + ' <end>'
+    sentence = sentence.lower()
+    return sentence
 
 
 def create_dataset(path, num_examples):
@@ -23,8 +24,8 @@ def create_dataset(path, num_examples):
             side_a = '<start> ' + row[0] + ' <end>'
             side_b = '<start> ' + row[1] + ' <end>'
             # normalize all whitespaces to space
-            side_a = ' '.join(side_a.split())
-            side_b = ' '.join(side_b.split())
+            side_a = ' '.join(side_a.split()).lower()
+            side_b = ' '.join(side_b.split()).lower()
             dataset.append([side_a, side_b])
     return dataset
 

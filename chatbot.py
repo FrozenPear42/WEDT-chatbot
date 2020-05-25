@@ -29,7 +29,7 @@ glove_model.load_from_file('data/glove.local.txt')
 
 num_examples = 100000
 input_tensor, target_tensor = load_dataset(
-    glove_model, 'data/reddit.csv', num_examples)
+    glove_model, 'data/reddit_merged.csv', num_examples)
 
 max_length_targ, max_length_inp = target_tensor.shape[1], input_tensor.shape[1]
 input_tensor_train, input_tensor_val, target_tensor_train, target_tensor_val = train_test_split(
@@ -38,7 +38,7 @@ input_tensor_train, input_tensor_val, target_tensor_train, target_tensor_val = t
 BUFFER_SIZE = len(input_tensor_train)
 BATCH_SIZE = 64
 steps_per_epoch = len(input_tensor_train)//BATCH_SIZE
-units = 256
+units = 768
 
 embedding_dim = glove_model.embedding_size
 vocab_size = glove_model.vocab_size
@@ -53,10 +53,8 @@ for i in range(vocab_size):
 
 print('created embedding_matrix')
 
-print("vocab_size: {}, input max length: {}, output max_length {}".format(
-    vocab_size, max_length_inp, max_length_targ))
-
-print(input_tensor[0], target_tensor[0])
+print("dataset_size: {}, vocab_size: {}, input max length: {}, output max_length {}".format(
+    input_tensor.shape[0], vocab_size, max_length_inp, max_length_targ))
 
 encoder = Encoder(vocab_size, embedding_dim, embedding_matrix,
                   max_length_inp, units, BATCH_SIZE)
@@ -110,8 +108,16 @@ def train_step(inp, targ, enc_hidden):
 
 if options.train:
     print('training')
-    EPOCHS = 10
-    for epoch in range(EPOCHS):
+    start_epoch = 0
+    latest_checkpoint = tf.train.latest_checkpoint(checkpoint_dir)
+    if latest_checkpoint:
+        print("latest checkpoint: {}".format(latest_checkpoint))
+        checkpoint.restore(latest_checkpoint)
+        start_epoch = int(latest_checkpoint[len(checkpoint_prefix) + 1:])
+        print("last checkpoint epoch: {}".format(start_epoch + 1))
+
+    EPOCHS = 20
+    for epoch in range(start_epoch, EPOCHS):
         start = time.time()
 
         enc_hidden = encoder.initialize_hidden_state()
