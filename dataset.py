@@ -30,6 +30,21 @@ def create_dataset(path, num_examples):
     return dataset
 
 
+def tokenize_sentence(sentence, model):
+    tokenizer = TweetTokenizer()
+    tokens = [emoji.demojize(token.lower())
+              for token in tokenizer.tokenize(sentence)]
+    vector = []
+    for token in tokens:
+        try:
+            vector.append(model.word_to_id[token])
+        except:
+            if '<unknown>' in model.word_to_id:
+                vector.append(model.word_to_id['<unknown>'])
+
+    return vector
+
+
 def tokenize(sentences, model):
     tokenizer = TweetTokenizer()
     tensor = []
@@ -41,7 +56,8 @@ def tokenize(sentences, model):
             try:
                 vector.append(model.id_for_word(token))
             except:
-                pass
+                if '<unknown>' in model.word_to_id:
+                    vector.append(model.word_to_id['<unknown>'])
         tensor.append(vector)
 
     tensor = tf.keras.preprocessing.sequence.pad_sequences(

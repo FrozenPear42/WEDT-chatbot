@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from sklearn.model_selection import train_test_split
 
+import traceback
 import unicodedata
 import re
 import numpy as np
@@ -15,30 +16,47 @@ import time
 import fileinput
 from optparse import OptionParser
 from model import Encoder, Decoder
-from dataset import load_dataset, preprocess_sentence
+from dataset import load_dataset, preprocess_sentence, tokenize_sentence
 from tf_glove.tf_glove import GloVeModel
 import emoji
+from pathlib import Path
 
 parser = OptionParser()
 parser.add_option('-t', '--train', action='store_true', dest='train')
+parser.add_option('-d', '--dir', action='store', dest='dir')
 
 (options, args) = parser.parse_args()
 
+glove_path = 'data/glove.local.all.with_unknown.txt'
+dataset_path = 'data/reddit_merged.csv'
+checkpoint_dir = './training_checkpoints'
+BATCH_SIZE = 64
+units = 512
+
+if options.dir:
+    with open(os.path.join(options.dir, 'config'), 'r', encoding='utf-8', newline='') as file:
+        lines = file.read().splitlines()
+        BATCH_SIZE = int(lines[0])
+        units = int(lines[1])
+        glove_path = lines[2]
+        dataset_path = lines[3]
+        checkpoint_dir = options.dir
+
+checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
+
 glove_model = GloVeModel()
-glove_model.load_from_file('data/glove.local.txt')
+glove_model.load_from_file(glove_path)
 
 num_examples = 100000
 input_tensor, target_tensor = load_dataset(
-    glove_model, 'data/reddit_merged.csv', num_examples)
+    glove_model, dataset_path, num_examples)
 
 max_length_targ, max_length_inp = target_tensor.shape[1], input_tensor.shape[1]
 input_tensor_train, input_tensor_val, target_tensor_train, target_tensor_val = train_test_split(
     input_tensor, target_tensor, test_size=0.2)
 
 BUFFER_SIZE = len(input_tensor_train)
-BATCH_SIZE = 64
 steps_per_epoch = len(input_tensor_train)//BATCH_SIZE
-units = 768
 
 embedding_dim = glove_model.embedding_size
 vocab_size = glove_model.vocab_size
@@ -49,6 +67,9 @@ dataset = dataset.batch(BATCH_SIZE, drop_remainder=True)
 
 embedding_matrix = np.zeros((vocab_size, embedding_dim))
 for i in range(vocab_size):
+    if len(glove_model.embeddings[i]) != 100:
+        print(i)
+        continue
     embedding_matrix[i] = np.asfarray(glove_model.embeddings[i])
 
 print('created embedding_matrix')
@@ -65,8 +86,6 @@ optimizer = tf.keras.optimizers.Adam()
 loss_object = tf.keras.losses.SparseCategoricalCrossentropy(
     from_logits=True, reduction='none')
 
-checkpoint_dir = './training_checkpoints'
-checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
 checkpoint = tf.train.Checkpoint(optimizer=optimizer,
                                  encoder=encoder,
                                  decoder=decoder)
@@ -108,6 +127,13 @@ def train_step(inp, targ, enc_hidden):
 
 if options.train:
     print('training')
+    Path(checkpoint_dir).mkdir(parents=True, exist_ok=True)
+    with open(os.path.join(checkpoint_dir, "config"), 'w', newline='',  encoding="utf8") as config_file:
+        config_file.write(str(BATCH_SIZE) + '\n')
+        config_file.write(str(units) + '\n')
+        config_file.write(glove_path + '\n')
+        config_file.write(dataset_path + '\n')
+
     start_epoch = 0
     latest_checkpoint = tf.train.latest_checkpoint(checkpoint_dir)
     if latest_checkpoint:
@@ -142,14 +168,7 @@ else:
 def evaluate(sentence):
     attention_plot = np.zeros((max_length_targ, max_length_inp))
 
-    sentence = preprocess_sentence(sentence)
-
-    inputs = []
-    for word in sentence.split(' '):
-        try:
-            inputs.append(glove_model.word_to_id[emoji.demojize(word)])
-        except:
-            pass
+    inputs = tokenize_sentence(sentence, glove_model)
 
     inputs = tf.keras.preprocessing.sequence.pad_sequences([inputs],
                                                            maxlen=max_length_inp,
@@ -190,6 +209,7 @@ while True:
     try:
         response = translate(text)
     except Exception as exc:
+        traceback.print_exc()
         print(exc)
         print('Unknown word!')
 
