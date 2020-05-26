@@ -20,6 +20,7 @@ from dataset import load_dataset, preprocess_sentence, tokenize_sentence
 from tf_glove.tf_glove import GloVeModel
 import emoji
 from pathlib import Path
+import datetime
 
 parser = OptionParser()
 parser.add_option('-t', '--train', action='store_true', dest='train')
@@ -27,11 +28,12 @@ parser.add_option('-d', '--dir', action='store', dest='dir')
 
 (options, args) = parser.parse_args()
 
-glove_path = 'data/glove.local.all.with_unknown.txt'
+glove_path = 'data/glove.local.txt'
 dataset_path = 'data/reddit_merged.csv'
 checkpoint_dir = './training_checkpoints'
-BATCH_SIZE = 64
-units = 512
+BATCH_SIZE = 256
+EPOCHS = 40
+units = 768
 
 if options.dir:
     with open(os.path.join(options.dir, 'config'), 'r', encoding='utf-8', newline='') as file:
@@ -142,12 +144,17 @@ if options.train:
         start_epoch = int(latest_checkpoint[len(checkpoint_prefix) + 1:])
         print("last checkpoint epoch: {}".format(start_epoch + 1))
 
-    EPOCHS = 20
+    current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    test_log_dir = 'logs/gradient_tape/' + current_time + '/test'
+    test_summary_writer = tf.summary.create_file_writer(test_log_dir)
+
     for epoch in range(start_epoch, EPOCHS):
         start = time.time()
 
         enc_hidden = encoder.initialize_hidden_state()
         total_loss = 0
+
+        batch_number = 0
 
         for (batch, (inp, targ)) in enumerate(dataset.take(steps_per_epoch)):
             batch_loss = train_step(inp, targ, enc_hidden)
@@ -156,6 +163,12 @@ if options.train:
             print('Epoch {} Batch {} Loss {:.4f}'.format(epoch + 1,
                                                          batch,
                                                          batch_loss.numpy()))
+            batch_number += 1
+            if batch_number % 5 == 0:
+                with test_summary_writer.as_default():
+                    tf.summary.scalar('loss', batch_loss.numpy(),
+                                      step=epoch*steps_per_epoch + batch_number)
+
         checkpoint.save(file_prefix=checkpoint_prefix)
 
         print('Epoch {} Loss {:.4f}'.format(epoch + 1,
