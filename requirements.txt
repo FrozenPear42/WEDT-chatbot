@@ -4,3 +4,4 @@ tensorflow
 nltk
 matplotlib
 sklearn
+emoji
