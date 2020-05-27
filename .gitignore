@@ -2,5 +2,6 @@
 .vscode/
 .idea/
 glove_logs/
-
+logs/
+checkpoints_backup/
 *.100d.txt

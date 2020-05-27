@@ -16,7 +16,7 @@ def preprocess_sentence(sentence):
     return sentence
 
 
-def create_dataset(path, num_examples):
+def create_dataset(path):
     dataset = []
     with open(path, newline='',  encoding="utf8") as data_file:
         reader = csv.reader(data_file, delimiter=',', quotechar='\"')
@@ -67,8 +67,8 @@ def tokenize(sentences, model):
     return tensor
 
 
-def load_dataset(glove_model, path, num_examples=None):
-    dataset = create_dataset(path, num_examples)
+def load_dataset(glove_model, path):
+    dataset = create_dataset(path)
 
     input_data = map(lambda x: x[0], dataset)
     output_data = map(lambda x: x[1], dataset)

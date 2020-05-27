@@ -26,32 +26,65 @@ parser = OptionParser()
 parser.add_option('-t', '--train', action='store_true', dest='train')
 parser.add_option('-d', '--dir', action='store', dest='dir')
 
+parser.add_option('-b', '--batch-size', action='store', dest='batch_size')
+parser.add_option('-e', '--epochs', action='store', dest='epochs')
+parser.add_option('-u', '--units', action='store', dest='units')
+
+parser.add_option('-g', '--glove', action='store', dest='glove')
+parser.add_option('-s', '--dataset', action='store', dest='dataset')
+
 (options, args) = parser.parse_args()
 
+# default params
 glove_path = 'data/glove.local.txt'
 dataset_path = 'data/reddit_merged.csv'
 checkpoint_dir = './training_checkpoints'
-BATCH_SIZE = 256
-EPOCHS = 40
+BATCH_SIZE = 128
+EPOCHS = 20
 units = 768
 
+if options.batch_size:
+    BATCH_SIZE = int(options.batch_size)
+
+if options.epochs:
+    EPOCHS = int(options.epochs)
+
+if options.units:
+    units = int(options.units)
+
+if options.glove:
+    glove_path = options.glove
+
+if options.dataset:
+    dataset_path = options.dataset
+
 if options.dir:
-    with open(os.path.join(options.dir, 'config'), 'r', encoding='utf-8', newline='') as file:
-        lines = file.read().splitlines()
-        BATCH_SIZE = int(lines[0])
-        units = int(lines[1])
-        glove_path = lines[2]
-        dataset_path = lines[3]
-        checkpoint_dir = options.dir
+    checkpoint_dir = options.dir
+    try:
+        with open(os.path.join(options.dir, 'config'), 'r', encoding='utf-8', newline='') as file:
+
+            lines = file.read().splitlines()
+            BATCH_SIZE = int(lines[0])
+            units = int(lines[1])
+            glove_path = lines[2]
+            dataset_path = lines[3]
+    except:
+        print("Failed to load config")
+
+print("NN params:")
+print("Units:       {}".format(units))
+print("Batch size:  {}".format(BATCH_SIZE))
+print("EPOCHS:      {}".format(EPOCHS))
+print("dataset:     {}".format(dataset_path))
+print("glove:       {}".format(glove_path))
+print("checkpoints: {}".format(checkpoint_dir))
 
 checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
 
 glove_model = GloVeModel()
 glove_model.load_from_file(glove_path)
 
-num_examples = 100000
-input_tensor, target_tensor = load_dataset(
-    glove_model, dataset_path, num_examples)
+input_tensor, target_tensor = load_dataset(glove_model, dataset_path)
 
 max_length_targ, max_length_inp = target_tensor.shape[1], input_tensor.shape[1]
 input_tensor_train, input_tensor_val, target_tensor_train, target_tensor_val = train_test_split(
@@ -144,8 +177,9 @@ if options.train:
         start_epoch = int(latest_checkpoint[len(checkpoint_prefix) + 1:])
         print("last checkpoint epoch: {}".format(start_epoch + 1))
 
+    # tensorboard output directory
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    test_log_dir = 'logs/gradient_tape/' + current_time + '/test'
+    test_log_dir = 'logs/chatbot/' + current_time + '/training'
     test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
     for epoch in range(start_epoch, EPOCHS):
@@ -211,7 +245,7 @@ def evaluate(sentence):
     return result, sentence
 
 
-def translate(sentence):
+def calculate_response(sentence):
     result, sentence = evaluate(sentence)
     return result
 
@@ -220,7 +254,7 @@ while True:
     text = input('User: ')
     response = None
     try:
-        response = translate(text)
+        response = calculate_response(text)
     except Exception as exc:
         traceback.print_exc()
         print(exc)
