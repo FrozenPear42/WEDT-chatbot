@@ -31,6 +31,9 @@ def create_dataset(path):
 
 
 def tokenize_sentence(sentence, model):
+
+    sentence = preprocess_sentence(sentence)
+
     tokenizer = TweetTokenizer()
     tokens = [emoji.demojize(token.lower())
               for token in tokenizer.tokenize(sentence)]
