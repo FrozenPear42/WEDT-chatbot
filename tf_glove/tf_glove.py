@@ -240,7 +240,8 @@ class GloVeModel():
             embeddings = self.embeddings
         from sklearn.manifold import TSNE
         tsne = TSNE(perplexity=30, n_components=2, init='pca', n_iter=5000)
-        low_dim_embs = tsne.fit_transform(embeddings[:word_count, :])
+        emb = embeddings[:word_count]
+        low_dim_embs = tsne.fit_transform(emb)
         labels = self.words[:word_count]
         return _plot_with_labels(low_dim_embs, labels, path, size)
 
